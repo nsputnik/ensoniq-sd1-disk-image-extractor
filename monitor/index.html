@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SD-1 Export Monitor</title>
+<style>
+:root {
+  --bg: #f4f2ee; --panel: #ffffff; --ink: #1d1c1a; --muted: #6b6760; --line: #dedad3;
+  --vfd-bg: #0b1210; --vfd-ink: #5ef2c8; --vfd-dim: #16302a;
+  --ok: #1f8a4c; --warn: #b26b00; --bad: #c0392b; --accent: #2f5fd0;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141412; --panel: #1d1d1a; --ink: #ecebe7; --muted: #9b978f; --line: #2f2e2a;
+    --accent: #7ea2ff; --ok: #4cc27f; --warn: #e3a33b; --bad: #f06a5a;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 20px 16px 40px; }
+header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+.pill { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--line); }
+.pill.on { color: var(--ok); border-color: currentColor; }
+.pill.off { color: var(--muted); }
+.pill.bad { color: var(--bad); border-color: currentColor; }
+.spacer { flex: 1; }
+button { font: inherit; border-radius: 8px; padding: 7px 14px; cursor: pointer;
+  border: 1px solid var(--bad); background: transparent; color: var(--bad); font-weight: 600; }
+button:hover { background: var(--bad); color: #fff; }
+button:disabled { opacity: .4; cursor: default; background: transparent; color: var(--bad); }
+.grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
+@media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+.card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; }
+.vfd { background: var(--vfd-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto;
+  font: 600 17px/1.35 "SF Mono", Menlo, monospace; color: var(--vfd-ink); white-space: pre;
+  text-shadow: 0 0 6px rgba(94,242,200,.55); }
+.full { grid-column: 1 / -1; }
+.bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 8px 0 6px; }
+.bar > div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 13px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+.stat { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+canvas { width: 100%; height: 190px; display: block; border-radius: 8px; background: var(--vfd-bg); }
+pre.log { margin: 0; max-height: 260px; overflow: auto; font: 12px/1.5 "SF Mono", Menlo, monospace;
+  color: var(--muted); white-space: pre-wrap; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+td.num { font-variant-numeric: tabular-nums; }
+a { color: var(--accent); }
+.items { display: flex; flex-wrap: wrap; gap: 6px; }
+.it { font-size: 12px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); }
+.it.running { border-color: var(--accent); color: var(--accent); }
+.it.ok { color: var(--ok); border-color: var(--ok); }
+.it.failed, .it.empty { color: var(--bad); border-color: var(--bad); }
+.muted { color: var(--muted); }
+.tablewrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SD-1 MIDI export</h1>
+    <span id="mame" class="pill off">MAME: —</span>
+    <span id="fresh" class="pill off">status: —</span>
+    <span class="spacer"></span>
+    <button id="kill" disabled title="Force-quit every MAME sd132 process (kill -9)">Kill MAME</button>
+  </header>
+
+  <div class="grid">
+    <section class="card full">
+      <h2>Emulated front panel</h2>
+      <div class="vfd" id="vfd">
+                                        </div>
+    </section>
+
+    <section class="card">
+      <h2>Progress</h2>
+      <div id="phase" style="font-weight:600">—</div>
+      <div class="bar"><div id="barfill"></div></div>
+      <dl class="kv">
+        <dt>Step</dt><dd id="step">—</dd>
+        <dt>Command</dt><dd id="cmd">—</dd>
+        <dt>Item</dt><dd id="item">—</dd>
+        <dt>Emulated time</dt><dd id="emu">—</dd>
+        <dt>Script</dt><dd id="script" class="muted">—</dd>
+      </dl>
+      <div class="items" id="items" style="margin-top:10px"></div>
+    </section>
+
+    <section class="card">
+      <h2>MIDI out (live)</h2>
+      <div class="stats">
+        <div class="stat"><b id="transport">—</b><span>transport</span></div>
+        <div class="stat"><b id="bpm">—</b><span>bpm (clock)</span></div>
+        <div class="stat"><b id="clocks">0</b><span>clocks</span></div>
+        <div class="stat"><b id="notes">0</b><span>notes</span></div>
+      </div>
+      <div class="muted" id="chans" style="font-size:12px;margin-bottom:8px">—</div>
+      <pre class="log" id="recent" style="max-height:150px"></pre>
+    </section>
+
+    <section class="card full">
+      <h2>Piano roll — current capture <span class="muted" id="rollinfo"></span></h2>
+      <canvas id="roll"></canvas>
+    </section>
+
+    <section class="card full">
+      <h2>Exported MIDI files</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>File</th><th>Notes</th><th>Channels</th><th>Tempo</th><th>Length</th><th>Timing</th></tr></thead>
+        <tbody id="exports"><tr><td colspan="6" class="muted">None yet.</td></tr></tbody>
+      </table></div>
+    </section>
+
+    <section class="card full">
+      <h2>Log</h2>
+      <pre class="log" id="log"></pre>
+    </section>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const COLORS = ["#5ef2c8","#ffb547","#7ea2ff","#ff6b8b","#c792ea","#9be564","#4dd0e1","#ffd166",
+                "#f78c6c","#82aaff","#e6e6e6","#b2ccd6","#ff9cac","#a3f7bf","#ffe082","#90caf9"];
+let lastStatus = null, lastExportsAt = 0;
+
+function fmtTime(s) {
+  if (s == null) return "—";
+  const m = Math.floor(s / 60), r = (s - m * 60).toFixed(1).padStart(4, "0");
+  return `${m}:${r}`;
+}
+
+function drawRoll(roll) {
+  const c = $("roll"), dpr = window.devicePixelRatio || 1;
+  const w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== w * dpr) { c.width = w * dpr; c.height = h * dpr; }
+  const g = c.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  if (!roll || !roll.length) { $("rollinfo").textContent = ""; return; }
+  let lo = 127, hi = 0;
+  for (const n of roll) { lo = Math.min(lo, n.n); hi = Math.max(hi, n.n); }
+  lo -= 2; hi += 2;
+  const tEnd = roll[roll.length - 1].t, window = 16, tStart = Math.max(0, tEnd - window);
+  const x = t => ((t - tStart) / window) * (w - 8) + 4;
+  const y = n => h - 6 - ((n - lo) / Math.max(1, hi - lo)) * (h - 12);
+  g.strokeStyle = "rgba(255,255,255,.06)";
+  for (let s = Math.ceil(tStart); s <= tEnd; s++) { g.beginPath(); g.moveTo(x(s), 0); g.lineTo(x(s), h); g.stroke(); }
+  for (const n of roll) {
+    if (n.t < tStart) continue;
+    g.fillStyle = COLORS[(n.ch - 1) % 16];
+    g.globalAlpha = 0.35 + 0.65 * (n.v / 127);
+    g.fillRect(x(n.t), y(n.n) - 2, 5, 4);
+  }
+  g.globalAlpha = 1;
+  $("rollinfo").textContent = `· last ${window}s · notes ${lo + 2}–${hi - 2}`;
+}
+
+function render(s) {
+  const running = (s.mame_pids || []).length > 0;
+  $("mame").textContent = running ? `MAME running (pid ${s.mame_pids.join(", ")})` : "MAME not running";
+  $("mame").className = "pill " + (running ? "on" : "off");
+  $("kill").disabled = !running;
+  const age = s.updated ? Date.now() / 1000 - s.updated : null;
+  $("fresh").textContent = age == null ? "no status yet" : age < 3 ? "live" : `last update ${Math.round(age)}s ago`;
+  $("fresh").className = "pill " + (age != null && age < 3 ? "on" : (running ? "bad" : "off"));
+  if (s.display) $("vfd").textContent = s.display.join("\n");
+  $("phase").textContent = s.phase || "—";
+  const pct = s.steps ? (100 * s.step / s.steps) : 0;
+  $("barfill").style.width = pct.toFixed(1) + "%";
+  $("step").textContent = s.steps ? `${s.step} / ${s.steps}` : "—";
+  $("cmd").textContent = s.cmd || "—";
+  $("item").textContent = s.item || "—";
+  $("emu").textContent = fmtTime(s.emu);
+  $("script").textContent = s.steps_file || "—";
+  const items = s.items || [];
+  $("items").innerHTML = items.map(i => `<span class="it ${i.result}" title="${i.result}">${esc(i.name)}</span>`).join("");
+  const m = s.midi || {};
+  $("transport").textContent = m.transport || "—";
+  $("bpm").textContent = m.bpm ? m.bpm.toFixed(1) : "—";
+  $("clocks").textContent = m.clocks ?? 0;
+  $("notes").textContent = m.notes ?? 0;
+  $("chans").textContent = (m.chans || []).length
+    ? "Notes by channel: " + m.chans.map(c => `ch${c.ch} ${c.notes}`).join(" · ")
+    : (s.capture ? "Capturing: " + s.capture.split("/").slice(-2).join("/") : "No capture running");
+  $("recent").textContent = (m.recent || []).slice().reverse().join("\n");
+  drawRoll(m.roll);
+  const log = $("log"), atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
+  log.textContent = (s.log || []).join("\n");
+  if (atBottom) log.scrollTop = log.scrollHeight;
+}
+
+function esc(t) { return String(t).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+async function poll() {
+  try {
+    const s = await (await fetch("/api/status")).json();
+    lastStatus = s; render(s);
+  } catch (e) {
+    $("fresh").textContent = "monitor server offline"; $("fresh").className = "pill bad";
+  }
+  if (Date.now() - lastExportsAt > 2000) { lastExportsAt = Date.now(); loadExports(); }
+  setTimeout(poll, 400);
+}
+
+async function loadExports() {
+  try {
+    const xs = await (await fetch("/api/exports")).json();
+    if (!xs.length) return;
+    $("exports").innerHTML = xs.slice().reverse().map(x => {
+      const i = x.info || {};
+      const tempo = (i.tempos || []).map(t => t[1]).filter((v, k, a) => a.indexOf(v) === k);
+      return `<tr><td><a href="/exports/${encodeURI(x.path)}" download>${esc(x.path)}</a></td>
+        <td class="num">${i.notes ?? "—"}</td><td>${(i.channels || []).join(", ") || "—"}</td>
+        <td class="num">${tempo.length ? tempo.slice(0, 3).join(" → ") + (tempo.length > 3 ? " …" : "") : "—"}</td>
+        <td class="num">${i.beats != null ? i.beats + " beats" : "—"}${i.seconds != null ? " · " + fmtTime(i.seconds) : ""}</td>
+        <td class="muted">${esc(i.timing || "")}</td></tr>`;
+    }).join("");
+  } catch (e) {}
+}
+
+$("kill").onclick = async () => {
+  if (!confirm("Force-quit MAME now?")) return;
+  await fetch("/api/kill", { method: "POST" });
+};
+window.addEventListener("resize", () => lastStatus && drawRoll((lastStatus.midi || {}).roll));
+poll();
+</script>
+</body>
+</html>

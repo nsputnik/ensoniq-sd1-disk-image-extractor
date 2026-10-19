@@ -1,0 +1,23 @@
+# machine noise
+.DS_Store
+__pycache__/
+.venv/
+venv/
+
+# you supply these; they can't be redistributed
+roms/*
+!roms/README.md
+mame/esqvfd_font_vfx.bin
+
+# MAME state written at run time (states hold a RAM image of the SD-1 firmware)
+mame/sta/
+mame/nvram/
+mame/cfg/
+mame/live/
+mame/steps/
+
+# your disks and everything extracted from them
+work/
+out/
+*.img
+*.hfe
