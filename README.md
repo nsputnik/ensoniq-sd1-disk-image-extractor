@@ -148,6 +148,14 @@ button or `pkill -9 -x mame`. Only one export runs at a time.
 - Tracks that used ROM programs need no dump. Programs shown as `CART-SND-n` came from a sound cartridge, which isn't on
   the disk.
 
+## See also
+
+- **[Sojus Records Ensoniq SD-1/32 plugin](https://github.com/sojusrecords/Ensoniq-SD-1-32-Voice-VST-emulation)**: a
+  free, open-source VST3/AU emulation of the SD-1, also built on MAME's `sd132`. It loads and saves SD-1 disk images
+  (`.img`, `.hfe` and more, including `examples/example-disk.hfe`), runs the original sequencer in sync with your DAW,
+  and exports programs, presets and sequences as SysEx. Use it to *play* these disks with the SD-1's own sounds; use
+  this project to get their contents out as Standard MIDI Files and SysEx, in batch.
+
 ## Credits
 
 - **[sd1diskutil](https://github.com/joemcmahon/sd1diskutil)** by Joe McMahon. Much of the disk and file-format detail

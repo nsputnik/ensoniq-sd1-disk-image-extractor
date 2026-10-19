@@ -130,7 +130,9 @@ byte size in the directory.
   rather than trusting the summary.
 - For badly damaged disks, read flux (`.scp`, 3 revolutions) and use sd1diskutil's `scp_to_img.py` / `merge_scp_hfe.py` /
   `triage_sequences.py` / `extract_intact_sequences.py`.
-- `img → HFE → img` through sd1cli is byte-identical. Sojus VST3 ≥ 0.9.8 reads `.img`; older versions need HFE.
+- `img → HFE → img` through sd1cli is byte-identical, and so is `tools/img_to_hfe.py` → `tools/hfe_to_img.py`.
+- The [Sojus Records SD-1 plugin](https://github.com/sojusrecords/Ensoniq-SD-1-32-Voice-VST-emulation) loads `.img`
+  and `.hfe` disk images (its README; earlier versions read only HFE).
 
 ---
 
