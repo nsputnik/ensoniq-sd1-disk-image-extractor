@@ -5,6 +5,11 @@ and driving MAME's `sd132` emulation, organised by topic. [README.md](README.md)
 offsets are 0-based. "Verified" means checked against real disks (Ensoniq factory disks and a set of user floppies),
 not just read from a document.
 
+Much of the format detail in sections 1–3 was first worked out by Joe McMahon's
+[sd1diskutil](https://github.com/joemcmahon/sd1diskutil); references to its source are given where they apply. This
+project adds the program offset in 30-sequence files, the ThirtyPrograms layout, the HxC IMG-export problem, the SD-1's
+MIDI and sequencer behaviour, and the MAME notes.
+
 ---
 
 ## 1. The floppy disk

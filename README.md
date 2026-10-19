@@ -10,31 +10,51 @@ Get everything off Ensoniq **SD-1 / VFX-SD** floppy disks:
 - **SysEx dumps saved on the disk → `.syx`.** The SD-1 can record any device's SysEx to floppy; this gets it back out.
 - **HxC `.hfe` → disk image**, sector by sector with CRC checks, recovering what a bad sector would otherwise break.
 
-One command per disk, with a live progress page in your browser.
+Everything runs from a local web page: it checks your setup (MAME, ROMs file by file), takes a disk image by
+drag and drop, runs the export while you watch the emulated SD-1 play, and hands you the files. Command-line
+tools do the same for scripting.
 
 ## What you need
 
 | | |
 |---|---|
-| **MAME** | [mamedev.org](https://www.mamedev.org/). macOS: `brew install mame`. On `PATH` or in `$MAME` |
-| **ROM sets** | `sd132.zip` and `esq2x40_vfx.zip` (MAME's names), in `roms/` or `$SD1_ROMPATH`. Not included: they're Ensoniq's |
+| **MAME** | [mamedev.org](https://www.mamedev.org/). macOS: `brew install mame`. Found on `PATH`, or set its location on the page |
+| **ROM sets** | `sd132.zip` and `esq2x40_vfx.zip` (MAME's names) in `roms/`, or point the page at any folder that has them (an existing MAME ROM folder works). Not included: they're Ensoniq's |
 | **Sequencer OS disk** | Any SD-1 disk image with a `SEQUENCER-OS` file. The SD-1 loads its sequencer from disk |
 | **Python 3.9+** | `pip install -r requirements.txt` (just [mido](https://mido.readthedocs.io/)) |
 
 Tested on macOS with MAME 0.283. The disk tools (`hfe_to_img.py`, `extract_programs.py`, `extract_sysex.py`,
 `sd1disk.py`) need only Python.
 
-## Quick start
+## Quick start (web page)
 
 ```sh
 pip install -r requirements.txt
-python3 -I tools/setup.py --os-disk sequencer-os.img      # once: checks MAME + ROMs, boots the SD-1, saves a state
-python3 -I tools/export_disk.py my-disk.hfe                # or my-disk.img
+python3 -I monitor/serve.py --open          # http://127.0.0.1:8017/
 ```
 
-A MAME window opens showing the emulated front panel, and the progress page starts at **http://127.0.0.1:8017/**:
-the emulated display, the current step, live MIDI (notes per channel, piano roll, clock tempo), finished files, the log,
-and a **Kill MAME** button. A 30-sequence file takes about 5–10 minutes.
+1. **Setup** shows a ✓ or ✗ for Python, MAME and the ROMs. MAME's own checksums verify every ROM file, so a missing or
+   bad file is named. Enter a MAME path or ROM folder if they aren't found; it's remembered in `settings.json`.
+2. **Disk images:** drop an `.hfe` or `.img` on the page. It lists the files on the disk and reports any unreadable sectors.
+   The first time, drop a disk that has the `SEQUENCER-OS` file and press **Use for setup** (the SD-1 loads its
+   sequencer from disk; this takes about a minute and is done once).
+3. Press **Export everything**. A MAME window opens on the emulated front panel, and the page shows its display, live MIDI,
+   a piano roll and the log. A 30-sequence file takes about 5–10 minutes. **Programs & SysEx only** needs no MAME.
+4. **Results** has every file to download, per disk.
+
+The page only listens on your own machine (127.0.0.1) and refuses requests from other web sites.
+
+## Quick start (command line)
+
+```sh
+python3 -I tools/setup.py --os-disk sequencer-os.img      # once
+python3 -I tools/export_disk.py my-disk.hfe                # or my-disk.img; also starts the progress page
+python3 -I tools/config.py                                 # what's set up, and what isn't
+```
+
+`MAME=/path/to/mame` and `SD1_ROMPATH=/path/to/roms` override `settings.json`.
+
+## Output
 
 ```
 out/my-disk/
@@ -47,8 +67,7 @@ out/my-disk/
   summary.txt            what was found, and whether every export passed its checks
 ```
 
-`python3 -I tools/sd1disk.py my-disk.img` lists a disk. `export_disk.py --no-midi` extracts only programs and SysEx
-(no MAME needed).
+`python3 -I tools/sd1disk.py my-disk.img` lists a disk.
 
 ## Imaging floppies
 
@@ -90,7 +109,9 @@ messages, the sequencer's MIDI behaviour, display quirks and MAME gotchas.
 
 | Script | Does |
 |---|---|
+| `monitor/serve.py [--open]` | The web page (setup, disks, export, live view, results). `--port`, `--exports` |
 | `tools/setup.py --os-disk X.img` | One-time setup: requirements, display font, Sequencer OS boot state |
+| `tools/config.py` | Prints the setup checks; holds the MAME / ROM settings the other tools use |
 | `tools/export_disk.py DISK` | Everything from one disk (`.img` or `.hfe`), with the progress page |
 | `tools/export_file.py FILE 30\|60 --disk X.img` | MIDI for one sequence file |
 | `tools/verify_export.py out/.../midi/FILE` | Bar checks; song notes and length vs. the sum of steps |
@@ -100,7 +121,6 @@ messages, the sequencer's MIDI behaviour, display quirks and MAME gotchas.
 | `tools/extract_sysex.py IMG DIR` | Saved SysEx dumps → `.syx` |
 | `tools/sd1disk.py IMG` | List a disk (also the disk-reading module the others use) |
 | `tools/cap2mid.py CAP OUT.mid` | Capture → `.mid` |
-| `monitor/serve.py` | Progress page (`--port`, `--exports`) |
 | `mame/run.sh STEPS [disk.img]` | Windowed MAME + `sd1.lua`. Env: `MAME`, `SD1_ROMPATH`, `SD1_SECONDS`, `SD1_MIDIOUT` |
 
 Run the tests (no MAME or ROMs needed): `python3 -m unittest discover -s tests`
@@ -123,12 +143,16 @@ button or `pkill -9 -x mame`. Only one export runs at a time.
 
 ## Credits
 
-- [MAME](https://www.mamedev.org/) and its `sd132` driver (GPL-2.0+; used unmodified, not included).
-- [sd1diskutil](https://github.com/joemcmahon/sd1diskutil) by Joe McMahon: the reference for the program, preset and
-  sequence-file layouts and SysEx format, and the `sd1cli` tool these outputs were checked against.
+- **[sd1diskutil](https://github.com/joemcmahon/sd1diskutil)** by Joe McMahon. Much of the disk and file-format detail
+  this project relies on was first worked out there: the program and preset layouts, the 60-program interleave, the
+  sequence-file structure, the file-type codes and the SysEx message format. Its `sd1cli` tool is what the program and
+  preset dumps here were checked against (byte for byte), and its sample disk was the test disk this project was
+  developed on. Use `sd1cli` for jobs this project doesn't do, such as writing files back to disk images or creating new ones.
+- **[MAME](https://www.mamedev.org/)** and its `sd132` driver (GPL-2.0+; used unmodified as a separate program, not included).
 - Gary Giebler's *Ensoniq Floppy Diskette Formats* article, and the SD-1 Musician's Manual
   ([polynominal.com](https://www.polynominal.com/ensoniq-sd1/)).
 
 ## License
 
-MIT (see [LICENSE](LICENSE)). Ensoniq ROMs, disks and manuals are not part of this project.
+[MIT No Attribution (MIT-0)](LICENSE): use, change and share it for anything, no credit required. Ensoniq ROMs, disks and
+manuals are not part of this project.

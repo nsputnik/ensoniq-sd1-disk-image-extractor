@@ -4,6 +4,9 @@ __pycache__/
 .venv/
 venv/
 
+# your local MAME / ROM locations (written by the web page)
+settings.json
+
 # you supply these; they can't be redistributed
 roms/*
 !roms/README.md

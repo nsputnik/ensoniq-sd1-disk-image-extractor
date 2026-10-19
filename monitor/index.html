@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SD-1 Export Monitor</title>
+<title>SD-1 Disk Extractor</title>
 <style>
 :root {
   --bg: #f4f2ee; --panel: #ffffff; --ink: #1d1c1a; --muted: #6b6760; --line: #dedad3;
@@ -28,9 +28,33 @@ h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
 .pill.bad { color: var(--bad); border-color: currentColor; }
 .spacer { flex: 1; }
 button { font: inherit; border-radius: 8px; padding: 7px 14px; cursor: pointer;
-  border: 1px solid var(--bad); background: transparent; color: var(--bad); font-weight: 600; }
-button:hover { background: var(--bad); color: #fff; }
-button:disabled { opacity: .4; cursor: default; background: transparent; color: var(--bad); }
+  border: 1px solid var(--accent); background: transparent; color: var(--accent); font-weight: 600; }
+button:hover { background: var(--accent); color: #fff; }
+button.primary { background: var(--accent); color: var(--panel); }
+button.danger { border-color: var(--bad); color: var(--bad); }
+button.danger:hover { background: var(--bad); color: #fff; }
+button:disabled, button:disabled:hover { opacity: .4; cursor: default; background: transparent; color: var(--muted); border-color: var(--line); }
+input[type=text] { font: 13px "SF Mono", Menlo, monospace; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink); flex: 1; min-width: 0; }
+.row { display: grid; grid-template-columns: 22px 130px 1fr; gap: 6px 10px; align-items: start; padding: 9px 0;
+  border-bottom: 1px solid var(--line); }
+.row:last-child { border-bottom: 0; }
+.row .label { font-weight: 600; }
+.row .body { min-width: 0; }
+.field { display: flex; gap: 8px; margin-top: 6px; }
+.ic { font-weight: 700; } .ic.ok { color: var(--ok); } .ic.no { color: var(--bad); } .ic.wait { color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.chip { font: 11px "SF Mono", Menlo, monospace; padding: 2px 6px; border-radius: 5px; border: 1px solid var(--line); }
+.chip.ok { color: var(--ok); border-color: var(--ok); } .chip.no { color: var(--bad); border-color: var(--bad); }
+.drop { border: 2px dashed var(--line); border-radius: 12px; padding: 22px; text-align: center; color: var(--muted); }
+.drop.over { border-color: var(--accent); color: var(--accent); }
+.disk { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 10px; }
+.disk h3 { font-size: 14px; margin: 0 0 6px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+.err { color: var(--bad); }
+details summary { cursor: pointer; }
+.links a { display: inline-block; margin: 2px 10px 2px 0; font-size: 13px; }
+@media (max-width: 600px) { .row { grid-template-columns: 22px 1fr; } .row .body { grid-column: 1 / -1; } }
 .grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
 @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
@@ -67,12 +91,56 @@ a { color: var(--accent); }
 <body>
 <main>
   <header>
-    <h1>SD-1 MIDI export</h1>
+    <h1>SD-1 disk image extractor</h1>
     <span id="mame" class="pill off">MAME: —</span>
     <span id="fresh" class="pill off">status: —</span>
     <span class="spacer"></span>
-    <button id="kill" disabled title="Force-quit every MAME sd132 process (kill -9)">Kill MAME</button>
+    <button id="kill" class="danger" disabled title="Force-quit every MAME sd132 process (kill -9)">Kill MAME</button>
   </header>
+
+  <div class="grid" style="margin-bottom:14px">
+    <section class="card full" id="setupcard">
+      <h2>1 · Setup <span class="muted" id="setupsum"></span></h2>
+      <div id="setupbody">
+        <div class="row"><span class="ic wait" id="py-ic">…</span><span class="label">Python</span>
+          <div class="body" id="py-msg">Checking…</div></div>
+        <div class="row"><span class="ic wait" id="mame-ic">…</span><span class="label">MAME</span>
+          <div class="body"><div id="mame-msg">Checking…</div>
+            <div class="field"><input type="text" id="mame-path" placeholder="leave empty to use mame on PATH">
+              <button id="mame-save">Save &amp; check</button></div></div></div>
+        <div class="row"><span class="ic wait" id="roms-ic">…</span><span class="label">ROMs</span>
+          <div class="body"><div id="roms-msg">Checking…</div>
+            <div class="muted" style="font-size:12px">A folder holding MAME's <code>sd132.zip</code> and <code>esq2x40_vfx.zip</code>
+              (an existing MAME ROM folder works). Checked file by file with MAME's own checksums.</div>
+            <div class="field"><input type="text" id="roms-path" placeholder="roms/ in this project">
+              <button id="roms-save">Save &amp; check</button></div>
+            <div class="chips" id="roms-files"></div></div></div>
+        <div class="row"><span class="ic wait" id="seq-ic">…</span><span class="label">Sequencer OS</span>
+          <div class="body"><div id="seq-msg">Checking…</div>
+            <div class="muted" style="font-size:12px">The SD-1 loads its sequencer from disk. Add a disk image with a
+              <code>SEQUENCER-OS</code> file below and press <b>Use for setup</b>. It boots the emulated SD-1 once (about a minute).</div></div></div>
+      </div>
+    </section>
+
+    <section class="card full">
+      <h2>2 · Disk images</h2>
+      <div class="drop" id="drop">Drop a <b>.hfe</b> (from HxC) or <b>.img</b> disk image here, or
+        <button id="pick" style="margin-left:6px">Choose file…</button>
+        <input type="file" id="file" accept=".img,.hfe" multiple hidden></div>
+      <div id="uploaderr" class="err" style="margin-top:8px"></div>
+      <div id="disks"></div>
+    </section>
+
+    <section class="card full" id="jobcard" hidden>
+      <h2>Job <span class="muted" id="jobsum"></span></h2>
+      <pre class="log" id="joblog" style="max-height:220px"></pre>
+    </section>
+
+    <section class="card full">
+      <h2>3 · Results</h2>
+      <div id="results" class="muted">Nothing exported yet.</div>
+    </section>
+  </div>
 
   <div class="grid">
     <section class="card full">
@@ -149,8 +217,8 @@ function drawRoll(roll) {
   let lo = 127, hi = 0;
   for (const n of roll) { lo = Math.min(lo, n.n); hi = Math.max(hi, n.n); }
   lo -= 2; hi += 2;
-  const tEnd = roll[roll.length - 1].t, window = 16, tStart = Math.max(0, tEnd - window);
-  const x = t => ((t - tStart) / window) * (w - 8) + 4;
+  const tEnd = roll[roll.length - 1].t, span = 16, tStart = Math.max(0, tEnd - span);
+  const x = t => ((t - tStart) / span) * (w - 8) + 4;
   const y = n => h - 6 - ((n - lo) / Math.max(1, hi - lo)) * (h - 12);
   g.strokeStyle = "rgba(255,255,255,.06)";
   for (let s = Math.ceil(tStart); s <= tEnd; s++) { g.beginPath(); g.moveTo(x(s), 0); g.lineTo(x(s), h); g.stroke(); }
@@ -161,7 +229,7 @@ function drawRoll(roll) {
     g.fillRect(x(n.t), y(n.n) - 2, 5, 4);
   }
   g.globalAlpha = 1;
-  $("rollinfo").textContent = `· last ${window}s · notes ${lo + 2}–${hi - 2}`;
+  $("rollinfo").textContent = `· last ${span}s · notes ${lo + 2}–${hi - 2}`;
 }
 
 function render(s) {
@@ -201,11 +269,12 @@ function render(s) {
 function esc(t) { return String(t).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 async function poll() {
-  try {
-    const s = await (await fetch("/api/status")).json();
-    lastStatus = s; render(s);
-  } catch (e) {
-    $("fresh").textContent = "monitor server offline"; $("fresh").className = "pill bad";
+  let s = null;
+  try { s = await (await fetch("/api/status")).json(); }
+  catch (e) { $("fresh").textContent = "server offline"; $("fresh").className = "pill bad"; }
+  if (s) {
+    try { lastStatus = s; render(s); }
+    catch (e) { console.error(e); $("fresh").textContent = "display error: " + e.message; $("fresh").className = "pill bad"; }
   }
   if (Date.now() - lastExportsAt > 2000) { lastExportsAt = Date.now(); loadExports(); }
   setTimeout(poll, 400);
@@ -232,6 +301,121 @@ $("kill").onclick = async () => {
   await fetch("/api/kill", { method: "POST" });
 };
 window.addEventListener("resize", () => lastStatus && drawRoll((lastStatus.midi || {}).roll));
+
+// ---------------------------------------------------------------- setup, disks, jobs, results
+let setup = null, job = null;
+const post = (url, body, raw) => fetch(url, { method: "POST", headers: raw ? { "X-SD1": "1" } :
+  { "X-SD1": "1", "Content-Type": "application/json" }, body: raw ? body : JSON.stringify(body || {}) });
+const ic = (el, ok, wait) => { el.textContent = wait ? "…" : ok ? "✓" : "✗"; el.className = "ic " + (wait ? "wait" : ok ? "ok" : "no"); };
+
+function renderSetup(s) {
+  setup = s;
+  ic($("py-ic"), s.python.ok); $("py-msg").textContent = s.python.message;
+  ic($("mame-ic"), s.mame.ok); $("mame-msg").textContent = s.mame.message + (s.mame.ok && s.mame.path ? " · " + s.mame.path : "");
+  if (document.activeElement !== $("mame-path")) $("mame-path").value = (s.settings || {}).mame || "";
+  ic($("roms-ic"), s.roms.ok, !s.mame.ok); $("roms-msg").textContent = s.roms.message;
+  if (document.activeElement !== $("roms-path")) $("roms-path").value = (s.settings || {}).rompath || "";
+  $("roms-files").innerHTML = (s.roms.files || []).map(f =>
+    `<span class="chip ${f.status === "ok" ? "ok" : "no"}" title="${esc(f.bytes + " bytes")}">${f.status === "ok" ? "✓" : "✗"} ${esc(f.name)}${f.status === "ok" ? "" : " — " + esc(f.status)}</span>`).join("");
+  ic($("seq-ic"), s.seqos.ok); $("seq-msg").textContent = s.seqos.message;
+  $("setupsum").textContent = s.ready ? "· ready" : "· needs attention";
+  renderDisks(lastDisks);
+}
+async function loadSetup() { try { renderSetup(await (await fetch("/api/setup")).json()); } catch (e) {} }
+async function saveSettings(body, btn) {
+  btn.disabled = true; btn.textContent = "Checking…";
+  try { renderSetup(await (await post("/api/settings", body)).json()); } finally { btn.disabled = false; btn.textContent = "Save & check"; }
+}
+$("mame-save").onclick = () => saveSettings({ mame: $("mame-path").value.trim() }, $("mame-save"));
+$("roms-save").onclick = () => saveSettings({ rompath: $("roms-path").value.trim() }, $("roms-save"));
+
+let lastDisks = [];
+function renderDisks(ds) {
+  lastDisks = ds || [];
+  const busy = job && job.running, ready = setup && setup.ready;
+  $("disks").innerHTML = lastDisks.map((d, k) => {
+    const files = d.files.map(f => `<tr><td><code>${esc(f.name)}</code></td><td>${esc(f.type)}</td>
+      <td class="num">${f.bytes}</td><td class="muted">${f.programs ? "programs saved in file" : ""}</td></tr>`).join("");
+    const lost = /LOST/.test(d.report || "");
+    const canSetup = d.sequencer_os && setup && setup.python.ok && setup.mame.ok && setup.roms.ok;
+    return `<div class="disk"><h3>${esc(d.name)} <span class="muted" style="font-weight:400">${d.files.length} files ·
+      ${d.sequence_files} sequence files${d.sequencer_os ? " · has SEQUENCER-OS" : ""}</span></h3>
+      ${d.report ? `<div class="${lost ? "err" : "muted"}" style="font-size:12px;white-space:pre-wrap">${esc(d.report)}</div>` : ""}
+      <details><summary class="muted">Files on the disk</summary><div class="tablewrap"><table>
+        <thead><tr><th>Name</th><th>Type</th><th>Bytes</th><th></th></tr></thead><tbody>${files}</tbody></table></div></details>
+      <div class="actions">
+        <button class="primary" data-act="export" data-k="${k}" ${busy || (!ready && d.sequence_files) ? "disabled" : ""}
+          title="${!ready && d.sequence_files ? "Finish setup first" : ""}">Export everything</button>
+        <button data-act="nomidi" data-k="${k}" ${busy ? "disabled" : ""}>Programs &amp; SysEx only</button>
+        <label class="muted" style="font-size:12px"><input type="checkbox" id="skip-${k}"> keep MIDI already exported</label>
+        ${d.sequencer_os ? `<button data-act="setup" data-k="${k}" ${busy || !canSetup ? "disabled" : ""}
+          title="${canSetup ? "" : "MAME and ROMs must pass first"}">Use for setup</button>` : ""}
+      </div></div>`;
+  }).join("");
+}
+$("disks").onclick = async ev => {
+  const b = ev.target.closest("button[data-act]"); if (!b) return;
+  const d = lastDisks[+b.dataset.k], act = b.dataset.act;
+  const url = act === "setup" ? "/api/run-setup" : "/api/export";
+  const body = { disk: d.name, no_midi: act === "nomidi", skip_existing: !!($("skip-" + b.dataset.k) || {}).checked };
+  const r = await post(url, body), j = await r.json();
+  if (!r.ok) { $("uploaderr").textContent = j.error; return; }
+  $("uploaderr").textContent = ""; renderJob(j);
+};
+
+async function upload(files) {
+  $("uploaderr").textContent = "";
+  for (const f of files) {
+    if (!/\.(img|hfe)$/i.test(f.name)) { $("uploaderr").textContent = f.name + ": choose a .img or .hfe file"; continue; }
+    $("drop").firstChild.textContent = "Reading " + f.name + "… ";
+    const r = await post("/api/upload?name=" + encodeURIComponent(f.name), f, true), j = await r.json();
+    if (!r.ok) $("uploaderr").textContent = f.name + ": " + j.error;
+  }
+  $("drop").firstChild.textContent = "Drop a ";
+  loadDisks();
+}
+$("pick").onclick = () => $("file").click();
+$("file").onchange = () => upload($("file").files);
+for (const e of ["dragenter", "dragover"]) $("drop").addEventListener(e, ev => { ev.preventDefault(); $("drop").classList.add("over"); });
+for (const e of ["dragleave", "drop"]) $("drop").addEventListener(e, ev => { ev.preventDefault(); $("drop").classList.remove("over"); });
+$("drop").addEventListener("drop", ev => upload(ev.dataTransfer.files));
+async function loadDisks() { try { renderDisks(await (await fetch("/api/disks")).json()); } catch (e) {} }
+
+function renderJob(j) {
+  const was = job && job.running;
+  job = j;
+  if (!j || !j.kind) { $("jobcard").hidden = true; return; }
+  $("jobcard").hidden = false;
+  const state = j.running ? "running" : j.exit === 0 ? "finished" : "failed (exit " + j.exit + ")";
+  $("jobsum").textContent = `· ${j.kind} · ${j.label} · ${state} · ${fmtTime(j.elapsed)}`;
+  const log = $("joblog"), atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
+  log.textContent = (j.log || []).join("\n");
+  if (atBottom) log.scrollTop = log.scrollHeight;
+  if (was && !j.running) { loadSetup(); loadResults(); }
+  renderDisks(lastDisks);
+}
+async function loadJob() { try { renderJob(await (await fetch("/api/job")).json()); } catch (e) {} }
+
+function link(p) { return `<a href="/exports/${encodeURI(p)}" ${p.endsWith(".txt") ? 'target="_blank"' : "download"}>${esc(p.split("/").pop())}</a>`; }
+async function loadResults() {
+  try {
+    const rs = await (await fetch("/api/results")).json();
+    if (!rs.length) return;
+    $("results").classList.remove("muted");
+    $("results").innerHTML = rs.map(r => `<div class="disk"><h3>${esc(r.disk)}
+        <a href="/exports/${encodeURI(r.disk + "/summary.txt")}" target="_blank" style="font-weight:400;font-size:13px">summary.txt</a></h3>
+      ${r.midi.length ? `<details open><summary>MIDI · ${r.midi.reduce((n, m) => n + m.mids.length, 0)} files in ${r.midi.length} sequence files</summary>
+        ${r.midi.map(m => `<div style="margin:4px 0 8px"><b>${esc(m.file)}</b><div class="links">${m.mids.map(link).join("")}</div></div>`).join("")}</details>` : ""}
+      ${r.programs.length ? `<details><summary>Programs &amp; presets (SD-1 SysEx) · ${r.programs.filter(p => p.endsWith(".syx")).length} files</summary>
+        <div class="links">${r.programs.map(link).join("")}</div></details>` : ""}
+      ${r.sysex.length ? `<details><summary>SysEx dumps · ${r.sysex.length} files</summary><div class="links">${r.sysex.map(link).join("")}</div></details>` : ""}
+      <details><summary class="muted">Summary</summary><pre class="log">${esc(r.summary)}</pre></details></div>`).join("");
+  } catch (e) {}
+}
+
+setInterval(() => { loadJob(); loadDisks(); }, 2000);
+setInterval(loadResults, 5000);
+loadSetup(); loadDisks(); loadJob(); loadResults();
 poll();
 </script>
 </body>

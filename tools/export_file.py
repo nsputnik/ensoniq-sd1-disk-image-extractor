@@ -27,6 +27,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
+import config  # noqa: E402
 import layout  # noqa: E402
 import make_steps  # noqa: E402
 
@@ -36,7 +37,7 @@ TYPE = {"60": "TYPE=60-SEQ", "30": "TYPE=30-SEQ"}
 def run(steps, path, disk, seconds, log, fatal=True):
     with open(path, "w") as f:
         f.write("\n".join(steps + ["note all done", "exit"]) + "\n")
-    env = dict(os.environ, SD1_SECONDS=str(seconds))
+    env = dict(config.env(), SD1_SECONDS=str(seconds))
     with open(log, "w") as out:
         subprocess.run([os.path.join(ROOT, "mame", "run.sh"), path, disk], stdout=out,
                        stderr=subprocess.STDOUT, env=env, check=False)

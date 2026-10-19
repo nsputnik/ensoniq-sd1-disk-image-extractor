@@ -12,3 +12,6 @@ First public release.
 - HxC `.hfe` → disk image with per-sector CRC checks; rebuilds the two blocks that hold no file data.
 - `tools/export_disk.py`: everything from one disk in one command, with a live progress page.
 - `tools/setup.py`: one-time setup (requirements, font, Sequencer OS boot state).
+- Web page (`monitor/serve.py`): setup checks with a per-file ROM report, MAME/ROM locations saved in `settings.json`,
+  drag-and-drop disk images, export jobs, live emulator view and downloadable results.
+- License: MIT No Attribution (MIT-0).
