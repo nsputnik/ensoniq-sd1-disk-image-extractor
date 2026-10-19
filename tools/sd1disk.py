@@ -82,7 +82,7 @@ class Disk:
             raw = self.raw[(15 + sub * 2) * BLOCK:(17 + sub * 2) * BLOCK]
             for i in range(39):
                 e = raw[i * 26:(i + 1) * 26]
-                if e[1]:
+                if e[1] in TYPES:   # unused entries are zeros, or format filler (6D B6) on a fresh disk
                     yield Entry(self, e, sub + 1)
 
     def free_blocks(self):

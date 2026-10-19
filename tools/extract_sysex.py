@@ -16,7 +16,7 @@ SYSEX = 0x14   # directory file type
 HEADER = 8
 MAKERS = {0x01: "Sequential", 0x04: "Moog", 0x06: "Lexicon", 0x07: "Kurzweil", 0x0F: "Ensoniq",
           0x10: "Oberheim", 0x18: "E-mu", 0x1A: "ART", 0x40: "Kawai", 0x41: "Roland", 0x42: "Korg",
-          0x43: "Yamaha", 0x44: "Casio", 0x47: "Akai"}
+          0x43: "Yamaha", 0x44: "Casio", 0x47: "Akai", 0x7D: "non-commercial"}
 
 
 def split(syx):

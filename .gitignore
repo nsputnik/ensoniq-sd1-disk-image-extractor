@@ -24,3 +24,7 @@ work/
 out/
 *.img
 *.hfe
+!examples/example-disk.hfe
+
+# MAME screenshots (F12 in the MAME window)
+snap/

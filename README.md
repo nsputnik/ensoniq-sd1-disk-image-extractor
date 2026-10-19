@@ -26,6 +26,12 @@ tools do the same for scripting.
 Tested on macOS with MAME 0.283. The disk tools (`hfe_to_img.py`, `extract_programs.py`, `extract_sysex.py`,
 `sd1disk.py`) need only Python.
 
+## Try it
+
+`examples/example-disk.hfe` is a disk made for this project on the emulated SD-1: four sequences, a song and a
+SysEx dump, all original. Drop it on the web page or run `python3 -I tools/export_disk.py examples/example-disk.hfe`.
+See [examples/README.md](examples/README.md) for what's on it and how it was made.
+
 ## Quick start (web page)
 
 ```sh
@@ -117,6 +123,7 @@ messages, the sequencer's MIDI behaviour, display quirks and MAME gotchas.
 | `tools/verify_export.py out/.../midi/FILE` | Bar checks; song notes and length vs. the sum of steps |
 | `tools/refresh.py DIR...` | Rebuild `.mid` from captures with the current converter (no emulation) |
 | `tools/hfe_to_img.py IN.hfe OUT.img` | HFE → disk image with CRC checks |
+| `tools/img_to_hfe.py IN.img OUT.hfe` | Disk image → HFE (for HxC / Gotek floppy emulators, and for MAME to write to) |
 | `tools/extract_programs.py IMG DIR` | Programs/presets → SD-1 SysEx + `index.txt` |
 | `tools/extract_sysex.py IMG DIR` | Saved SysEx dumps → `.syx` |
 | `tools/sd1disk.py IMG` | List a disk (also the disk-reading module the others use) |

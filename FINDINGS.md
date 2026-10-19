@@ -243,7 +243,39 @@ byte size in the directory.
 
 ---
 
-## 10. Open items
+## 10. Writing to disks on the emulated SD-1 (how the example disk was made)
+
+- **MAME can read but not write the Ensoniq `.img` layout.** Saving an `.img` renumbers each track's sectors from 1,
+  so every track shifts by one sector and sector 0 is lost; the SD-1 then reports `DISK ERROR - BAD DIRECTORY`.
+  **Mount an HFE** for anything the SD-1 writes: MAME saves HFE faithfully. `tools/img_to_hfe.py` makes one.
+- A freshly formatted disk (verified against the SD-1's own FORMAT): blocks 0 and 23+ are `6D B6` filler; block 1 repeats a
+  40-byte device-ID record ending in `ID`; block 2 repeats a 30-byte OS record (free count, `00 01`, `OS`); block 3 holds
+  the four `sub direct 1..4` entries; **every directory's last block ends in `DR`** (blocks 4, 16, 18, 20, 22) and
+  **every FAT block ends in `FB`** (blocks 5–14). The SD-1 checks these markers.
+- **MIDI IN from a file:** MAME's `sd132` takes a `.mid` or `.syx` as its MIDI IN, played from the moment it's mounted.
+  SMF escape events (`F7 01 FA`, `F7 01 F8`, `F7 01 FC`) arrive as raw MIDI Start, Clock and Stop.
+- **Recording:** Hold Record and press Play. The first take sets the sequence length from where Stop lands, and its
+  bar 1 is the click's bar in which the first note falls. The click grid doesn't start at a fixed time after
+  Play, and the SD-1 sends **no MIDI clock while recording**, so a take can't be timed from outside. Instead set
+  **Seq Control CLOCK=MIDI** and let the recorded file bring Start, Clock and Stop: every take is then exact. On
+  external clock there is no count-off, and Stop ends a first take exactly on the bar line. A note sent on the same
+  tick as a clock can be stamped one tick late, so quantize to the grid afterwards (Edit Track → QUANTIZE).
+- **Keyboard naming over MIDI** (Master page 3, KYBD-NAMING=ON): white keys from C2 type 0–9 then A–Z; black keys are
+  cursor left, cursor right, space, dash, plus. The cursor doesn't advance by itself, so follow every character
+  with cursor-right. Sequence names are 11 characters. Song names are `$` plus 10.
+- **SYS-EX REC** (Storage → Disk) clears the sequencer memory first ("SEQUENCER DATA WILL BE ERASED"), and with it
+  the CLOCK setting. Record SysEx before making sequences.
+- **The last sequence in memory can't be erased.** The OS keeps its default SEQUENCE-01 until another sequence exists.
+- **Song step editor:** SEQ (lower middle) and REPS (lower right) step with Up; STEP (lower left) + Up moves to the
+  next step, which starts as `*SONG-END*`. **Press slowly:** a quick press can be taken twice on the SEQ field.
+- **The display updates about once per emulated second**, so after a press wait until the text changes before reading it.
+- **Saving a state while a file is mounted on MIDI IN** and loading it in a later session crashes MAME (0.283). So does
+  any MAME API call from a script coroutine resumed after the machine has stopped. `-seconds_to_run` is absolute
+  emulated time, so loading a state saved later than that limit stops MAME at once.
+
+---
+
+## 11. Open items
 
 - A song's expected tempo map is built from step *names*. With same-named sequences of different tempo it's rejected
   and the file uses the clock-measured tempo, about 0.3% low. Build it from the steps `verify_export.py` picks.

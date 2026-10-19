@@ -8,6 +8,8 @@
 --   untilnot <text> [timeout]  wait until the display no longer contains text
 --   status <word> [timeout] wait until the sequencer status (lower-left: STOP, PLAY, SNGS...) is word
 --   seek <btn> <max> <text> press btn (one at a time) until the display contains text
+--   slowseek <btn> <max> <text>  like seek, but one press at a time with a long settle (2.5 s): some
+--                           fields (song step SEQ) take a quick press twice
 --   ifpress <text> | <btn>...  press button(s) only if the display contains text (!text: doesn't)
 --   setnum <btn> <value>    select a soft-button field and step it with up/down to value
 --                           (reads the field's current number off the display)
@@ -29,6 +31,12 @@
 --   note <text>             set the phase line on the monitor
 --   dump [tag]              print the display
 --   save <name> / load <name>  MAME state slot
+--   recplay                 hold Record, press Play, release Record; remembers when Play went down
+--   at <seconds>            wait until that many emulated seconds after the last recplay
+--   midiin <file.mid|.syx>  mount a file on MIDI IN: MAME plays it into the SD-1 from this moment
+--   midiinoff               unmount it
+--   midireset               forget the last MIDI Start and clock count (before a Play)
+--   clocks <n> [timeout]    wait for the SD-1's MIDI Start, then until it has sent n clocks
 --   reinsert                eject and reinsert the floppy, so the OS sees a disk change after a
 --                           state load (a state remembers the directory of the disk it was saved with)
 --   exit
@@ -206,7 +214,14 @@ local function fieldword(b)
   for tok in display()[p[1]]:sub(9):gmatch("%S+") do toks[#toks+1] = tok end
   return toks[p[2]]
 end
-local function shows(text) local d = display(); return (d[1] .. d[2]):find(text, 1, true) ~= nil end
+local function image(brief)
+  for _, img in pairs(manager.machine.images) do
+    if img.brief_instance_name == brief then return img end
+  end
+end
+-- 5/S and 0/O share a glyph on the VFD, so match with both sides folded the same way ("STEP=05" finds "STEP=0S").
+local function fold(t) return (t:gsub("5", "S"):gsub("0", "O")) end
+local function shows(text) local d = display(); return fold(d[1] .. d[2]):find(fold(text), 1, true) ~= nil end
 
 PRESS = tonumber(os.getenv("SD1_PRESS") or "0.05")
 local steps = {}
@@ -221,10 +236,41 @@ end
 
 -- Waits use emu.wait (scheduler timers). The sd132 driver has no screen, so frame
 -- callbacks only arrive about once per emulated second -- far too coarse for button taps.
+-- When MAME stops (window closed, time cap), it resumes this script once more; touching the machine
+-- then crashes MAME (seen in 0.283). Every wait goes through ewait, which ends the script instead.
+local STOPPED = false
+local stop_sub = emu.add_machine_stop_notifier(function() STOPPED = true end)
+-- SD1_SECONDS is a limit in emulated seconds counted from the start or the last state load (a loaded
+-- state carries its own clock, so MAME's absolute -seconds_to_run alone would stop the run at once).
+local LIMIT = tonumber(os.getenv("SD1_SECONDS") or "900")
+local deadline = nil
+local function ewait(d)
+  emu.wait(d)
+  if STOPPED then error("machine stopped", 0) end
+  local now = manager.machine.time.seconds
+  deadline = deadline or (now + LIMIT)
+  if now > deadline then
+    print(string.format("[%9.2f] time limit (%d emulated seconds) reached, exiting", now, LIMIT))
+    manager.machine:exit()
+    error("time limit", 0)
+  end
+end
 local function wait(sec)
   while sec > 0 do
-    local d = math.min(sec, 0.25); emu.wait(d); sec = sec - d; publish()
+    local d = math.min(sec, 0.25); ewait(d); sec = sec - d; publish()
   end
+end
+-- The panel display refreshes only about once per emulated second, so after a press wait until the
+-- text actually changes (or give up after maxwait) before reading it; a fixed short wait can read a
+-- stale display and press again, overshooting the value.
+local function settle(before, maxwait)
+  local t0 = manager.machine.time.seconds
+  while manager.machine.time.seconds - t0 < (maxwait or 1.5) do
+    local d = display()
+    if d[1] .. d[2] ~= before then wait(0.1); return true end
+    wait(0.05)
+  end
+  return false
 end
 local function fail(msg)
   log("FAILED: " .. msg); ST.phase = "failed: " .. msg
@@ -278,7 +324,7 @@ local co = coroutine.create(function()
       -- Wait for one clock past the end (the loop restart, tick = length): notes in the last
       -- 3 ticks come after the final clock, and stopping on it cut them. cap2mid trims the restart.
       while MID.clocks <= target and MID.transport ~= "stop" and manager.machine.time.seconds - t0 <= to do
-        emu.wait(0.002)
+        ewait(0.002)
       end
       if MID.transport == "stop" then
         log(string.format("playlength: SD-1 stopped itself after %d of %d clocks", MID.clocks, target))
@@ -295,10 +341,21 @@ local co = coroutine.create(function()
       local fl, found = field(btn(b)), false
       for _ = 0, tonumber(mx) do
         if shows(text) then found = true; break end
-        fl:set_value(1); wait(PRESS); fl:clear_value(); wait(0.6)
+        local d = display()
+        fl:set_value(1); wait(PRESS); fl:clear_value(); settle(d[1] .. d[2], 1.5)
       end
       dump((found and "seek ok '" or "SEEK FAILED '") .. text .. "'")
       if not found then return fail("seek '" .. text .. "'") end
+    elseif cmd == "slowseek" then
+      local b, mx, text = rest:match("^(%S+)%s+(%d+)%s+(.+)$")
+      local fl, found = field(btn(b)), false
+      for _ = 0, tonumber(mx) do
+        wait(2.5)
+        if shows(text) then found = true; break end
+        fl:set_value(1); wait(PRESS); fl:clear_value()
+      end
+      dump((found and "slowseek ok '" or "SLOWSEEK FAILED '") .. text .. "'")
+      if not found then return fail("slowseek '" .. text .. "'") end
     elseif cmd == "ifpress" then
       local text, btns = rest:match("^(.-)%s*|%s*(.+)$")
       local want = true
@@ -317,7 +374,8 @@ local co = coroutine.create(function()
         local cur = fieldnum(b)
         if not cur then return fail("setnum " .. b .. ": no number on display") end
         local f2 = field(btn(cur < target and "up" or "down"))
-        f2:set_value(1); wait(PRESS); f2:clear_value(); wait(0.3); tries = tries + 1
+        local d = display()
+        f2:set_value(1); wait(PRESS); f2:clear_value(); settle(d[1] .. d[2], 1.5); tries = tries + 1
       end
       if fieldnum(b) ~= target then dump("setnum"); return fail("setnum " .. b .. " " .. target) end
     elseif cmd == "setword" then
@@ -325,7 +383,8 @@ local co = coroutine.create(function()
       local fl = field(btn(b)); fl:set_value(1); wait(PRESS); fl:clear_value(); wait(0.4)
       local tries = 0
       while fieldword(b) ~= want and tries < 6 do
-        local f2 = field(btn("down")); f2:set_value(1); wait(PRESS); f2:clear_value(); wait(0.3)
+        local d = display()
+        local f2 = field(btn("down")); f2:set_value(1); wait(PRESS); f2:clear_value(); settle(d[1] .. d[2], 1.5)
         tries = tries + 1
       end
       if fieldword(b) ~= want then dump("setword"); return fail("setword " .. b .. " " .. want) end
@@ -407,12 +466,47 @@ local co = coroutine.create(function()
       ST.item = nil
     elseif cmd == "note" then ST.phase = rest; log(rest)
     elseif cmd == "dump" then dump(rest)
-    elseif cmd == "save" then manager.machine:save(rest); wait(0.1)
-    elseif cmd == "load" then manager.machine:load(rest); wait(0.1)
+    elseif cmd == "save" then
+      -- never save with a file on MIDI IN: restoring such a state without it crashes MAME (seen 0.283)
+      local mi = image("min")
+      if mi and mi.filename and mi.filename ~= "" then mi:unload(); wait(0.2) end
+      manager.machine:save(rest); wait(0.1)
+    elseif cmd == "load" then
+      manager.machine:load(rest); emu.wait(0.1)
+      if STOPPED then error("machine stopped", 0) end
+      deadline = manager.machine.time.seconds + LIMIT   -- the limit counts from the loaded state
+    elseif cmd == "recplay" then
+      local rec, play = field(btn("rec")), field(btn("play"))
+      rec:set_value(1); wait(0.1)
+      play:set_value(1); ST.rec_t0 = manager.machine.time.seconds; wait(PRESS); play:clear_value()
+      wait(0.05); rec:clear_value()
+    elseif cmd == "at" then
+      if not ST.rec_t0 then return fail("at: no recplay yet") end
+      local target = ST.rec_t0 + tonumber(rest)
+      while manager.machine.time.seconds < target do ewait(math.min(0.001, target - manager.machine.time.seconds)) end
+    elseif cmd == "midiin" or cmd == "midiinoff" then
+      local img = image("min")
+      if not img then return fail("no MIDI IN image device") end
+      if img.filename and img.filename ~= "" then img:unload() end
+      if cmd == "midiin" then
+        local err = img:load(rest)
+        if err and err ~= "" and err ~= true then return fail("midiin " .. rest .. ": " .. tostring(err)) end
+        log("MIDI IN <- " .. rest)
+      end
+    elseif cmd == "midilog" then
+      log(string.format("MIDI OUT: %d bytes, %d clocks, transport %s, start %s", MID.bytes, MID.clocks,
+                        MID.transport, MID.t0 and string.format("%.3f", MID.t0) or "none"))
+    elseif cmd == "midireset" then
+      MID.t0 = nil; MID.clocks = 0; MID.transport = "idle"
+    elseif cmd == "clocks" then
+      local n, to = rest:match("^(%d+)%s*(%d*)$"); n = tonumber(n); to = tonumber(to) or 600
+      local t0 = manager.machine.time.seconds
+      while (MID.t0 == nil or MID.clocks < n) and manager.machine.time.seconds - t0 <= to do ewait(0.001) end
+      if MID.t0 == nil or MID.clocks < n then return fail("clocks " .. n .. ": got " .. MID.clocks) end
     elseif cmd == "reinsert" then
       for tag, img in pairs(manager.machine.images) do
         local fn = img.filename
-        if fn and fn ~= "" then
+        if fn and fn ~= "" and img.brief_instance_name == "flop" then
           img:unload(); wait(1); img:load(fn); log("reinserted " .. tag .. ": " .. fn)
         end
       end

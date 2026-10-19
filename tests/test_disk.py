@@ -113,6 +113,20 @@ def make_hfe(disk, corrupt=None):
     return bytes(header) + bytes(lut) + bytes(body)
 
 
+class HfeEncoder(unittest.TestCase):
+    def test_img_to_hfe_round_trip(self):
+        import img_to_hfe
+        disk = bytes((b * 7 + i) & 0xFF for b in range(1600) for i in range(512))
+        hfe = write_tmp(img_to_hfe.to_hfe(disk), ".hfe")
+        out = hfe + ".img"
+        sys.argv = ["hfe_to_img", hfe, out]
+        with self.assertRaises(SystemExit) as cm:
+            hfe_to_img.main()
+        self.assertEqual(cm.exception.code, 0)
+        with open(out, "rb") as f:
+            self.assertEqual(f.read(), disk)
+
+
 class HfeDecoder(unittest.TestCase):
     def test_round_trip_and_bad_sectors(self):
         disk = make_image()

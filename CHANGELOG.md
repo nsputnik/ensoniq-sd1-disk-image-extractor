@@ -15,3 +15,8 @@ First public release.
 - Web page (`monitor/serve.py`): setup checks with a per-file ROM report, MAME/ROM locations saved in `settings.json`,
   drag-and-drop disk images, export jobs, live emulator view and downloadable results.
 - License: MIT No Attribution (MIT-0).
+- `examples/example-disk.hfe`: an original example disk built on the emulated SD-1 (`examples/build_example.py`),
+  with a note-for-note check (`examples/compare.py`).
+- `tools/img_to_hfe.py`; `mame/sd1.lua`: MIDI IN commands (`midiin`, `recplay`, `at`, `clocks`, `slowseek`),
+  display-change waits, 5/S and 0/O folded in text matching, clean stop (no crash when MAME stops), time limit
+  counted from the last state load.
